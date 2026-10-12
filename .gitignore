@@ -1,0 +1,14 @@
+build/
+build-here/
+build-phase2/
+build-phase3/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.o
+*.obj
+*.exe
+/build*/
+/data/
+/results/phase7_runs.csv
