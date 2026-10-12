@@ -1,5 +1,6 @@
 #include "generator.hpp"
 #include "merge.hpp"
+#include "parallel_equal.hpp"
 #include "verify.hpp"
 
 #include <filesystem>
@@ -28,6 +29,39 @@ int main(int argc, char** argv) {
 
             std::cout << "Compacted " << input_paths.size()
                       << " SSTables into " << output_path.string() << '\n'
+                      << "Live output records: " << output_records.size()
+                      << '\n';
+            return 0;
+        }
+
+        if (argc > 1 && std::string(argv[1]) == "parallel-equal") {
+            if (argc < 7) {
+                throw std::runtime_error(
+                    "usage: splice parallel-equal <output.sst> "
+                    "<keyspace_size> <partitions> <threads> "
+                    "<input1.sst> [input2.sst ...]");
+            }
+
+            const std::filesystem::path output_path = argv[2];
+            const auto keyspace_size =
+                static_cast<splice::Key>(std::stoull(argv[3]));
+            const auto partitions =
+                static_cast<std::size_t>(std::stoull(argv[4]));
+            const auto threads =
+                static_cast<std::size_t>(std::stoull(argv[5]));
+
+            std::vector<std::filesystem::path> input_paths;
+            for (int i = 6; i < argc; ++i) {
+                input_paths.emplace_back(argv[i]);
+            }
+
+            const auto output_records = splice::parallel_equal_compact(
+                input_paths, keyspace_size, partitions, threads);
+            splice::SSTableWriter::write(output_path, output_records);
+
+            std::cout << "Equal-width parallel compaction used "
+                      << partitions << " partitions and " << threads
+                      << " requested threads\n"
                       << "Live output records: " << output_records.size()
                       << '\n';
             return 0;
