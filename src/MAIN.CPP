@@ -1,12 +1,17 @@
 #include "generator.hpp"
 #include "merge.hpp"
 #include "parallel_equal.hpp"
+#include "parallel_executor.hpp"
+#include "sampling.hpp"
 #include "verify.hpp"
 
+#include <chrono>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 int main(int argc, char** argv) {
@@ -23,14 +28,12 @@ int main(int argc, char** argv) {
                 input_paths.emplace_back(argv[i]);
             }
 
-            const auto output_records =
-                splice::sequential_compact(input_paths);
-            splice::SSTableWriter::write(output_path, output_records);
+            auto records = splice::sequential_compact(input_paths);
+            splice::SSTableWriter::write(output_path, records);
 
             std::cout << "Compacted " << input_paths.size()
                       << " SSTables into " << output_path.string() << '\n'
-                      << "Live output records: " << output_records.size()
-                      << '\n';
+                      << "Live output records: " << records.size() << '\n';
             return 0;
         }
 
@@ -55,15 +58,71 @@ int main(int argc, char** argv) {
                 input_paths.emplace_back(argv[i]);
             }
 
-            const auto output_records = splice::parallel_equal_compact(
+            auto records = splice::parallel_equal_compact(
                 input_paths, keyspace_size, partitions, threads);
-            splice::SSTableWriter::write(output_path, output_records);
+            splice::SSTableWriter::write(output_path, records);
 
-            std::cout << "Equal-width parallel compaction used "
-                      << partitions << " partitions and " << threads
-                      << " requested threads\n"
-                      << "Live output records: " << output_records.size()
-                      << '\n';
+            std::cout << "Equal-width compaction: " << partitions
+                      << " partitions, " << threads << " requested threads\n"
+                      << "Live output records: " << records.size() << '\n';
+            return 0;
+        }
+
+        if (argc > 1 && std::string(argv[1]) == "splice") {
+            if (argc < 8) {
+                throw std::runtime_error(
+                    "usage: splice splice <output.sst> <keyspace_size> "
+                    "<partitions> <threads> <sample_fraction> "
+                    "<input1.sst> [input2.sst ...]");
+            }
+
+            const auto total_start = std::chrono::steady_clock::now();
+            const std::filesystem::path output_path = argv[2];
+            const auto keyspace_size =
+                static_cast<splice::Key>(std::stoull(argv[3]));
+            const auto partitions =
+                static_cast<std::size_t>(std::stoull(argv[4]));
+            const auto threads =
+                static_cast<std::size_t>(std::stoull(argv[5]));
+            const double sample_fraction = std::stod(argv[6]);
+
+            std::vector<std::filesystem::path> input_paths;
+            for (int i = 7; i < argc; ++i) {
+                input_paths.emplace_back(argv[i]);
+            }
+
+            const auto sampling_start = std::chrono::steady_clock::now();
+            const auto plan = splice::plan_sampled_ranges(
+                input_paths, keyspace_size, partitions, sample_fraction);
+            const auto merge_start = std::chrono::steady_clock::now();
+
+            auto records = splice::parallel_compact_ranges(
+                input_paths, plan.boundaries, threads);
+            const auto merge_end = std::chrono::steady_clock::now();
+
+            splice::SSTableWriter::write(output_path, records);
+            const auto total_end = std::chrono::steady_clock::now();
+
+            const auto sample_ms =
+                std::chrono::duration<double, std::milli>(
+                    merge_start - sampling_start).count();
+            const auto merge_ms =
+                std::chrono::duration<double, std::milli>(
+                    merge_end - merge_start).count();
+            const auto total_ms =
+                std::chrono::duration<double, std::milli>(
+                    total_end - total_start).count();
+
+            std::cout << std::fixed << std::setprecision(3)
+                      << "SPLICE: " << plan.samples_read << " samples, "
+                      << plan.actual_partitions() << " actual ranges for "
+                      << partitions << " requested partitions, "
+                      << threads << " requested threads\n"
+                      << "Sampling and planning: " << sample_ms << " ms\n"
+                      << "Parallel merge and join: " << merge_ms << " ms\n"
+                      << "End-to-end including output write: "
+                      << total_ms << " ms\n"
+                      << "Live output records: " << records.size() << '\n';
             return 0;
         }
 
