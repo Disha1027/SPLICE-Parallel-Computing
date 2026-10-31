@@ -11,7 +11,6 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <utility>
 #include <vector>
 
 int main(int argc, char** argv) {
@@ -54,17 +53,27 @@ int main(int argc, char** argv) {
                 static_cast<std::size_t>(std::stoull(argv[5]));
 
             std::vector<std::filesystem::path> input_paths;
+            splice::SchedulePolicy policy = splice::SchedulePolicy::Static;
             for (int i = 6; i < argc; ++i) {
-                input_paths.emplace_back(argv[i]);
+                if (std::string(argv[i]) == "--schedule" && i + 1 < argc) {
+                    policy = splice::parse_schedule_policy(argv[++i]);
+                } else {
+                    input_paths.emplace_back(argv[i]);
+                }
             }
 
-            auto records = splice::parallel_equal_compact(
-                input_paths, keyspace_size, partitions, threads);
-            splice::SSTableWriter::write(output_path, records);
+            auto result = splice::parallel_equal_compact(
+                input_paths, keyspace_size, partitions, threads, policy);
+            splice::SSTableWriter::write(output_path, result.records);
 
-            std::cout << "Equal-width compaction: " << partitions
-                      << " partitions, " << threads << " requested threads\n"
-                      << "Live output records: " << records.size() << '\n';
+            std::cout << std::fixed << std::setprecision(3)
+                      << "Equal-width compaction: " << partitions
+                      << " partitions, " << threads << " requested threads, "
+                      << "schedule=" << splice::to_string(policy) << '\n'
+                      << "Load imbalance (LI): " << result.stats.load_imbalance << '\n'
+                      << "Max thread time: " << result.stats.max_thread_ms << " ms\n"
+                      << "Avg thread time: " << result.stats.avg_thread_ms << " ms\n"
+                      << "Live output records: " << result.records.size() << '\n';
             return 0;
         }
 
@@ -73,7 +82,7 @@ int main(int argc, char** argv) {
                 throw std::runtime_error(
                     "usage: splice splice <output.sst> <keyspace_size> "
                     "<partitions> <threads> <sample_fraction> "
-                    "<input1.sst> [input2.sst ...]");
+                    "<input1.sst> [input2.sst ...] [--schedule static|dynamic|guided|tasks]");
             }
 
             const auto total_start = std::chrono::steady_clock::now();
@@ -87,8 +96,13 @@ int main(int argc, char** argv) {
             const double sample_fraction = std::stod(argv[6]);
 
             std::vector<std::filesystem::path> input_paths;
+            splice::SchedulePolicy policy = splice::SchedulePolicy::Static;
             for (int i = 7; i < argc; ++i) {
-                input_paths.emplace_back(argv[i]);
+                if (std::string(argv[i]) == "--schedule" && i + 1 < argc) {
+                    policy = splice::parse_schedule_policy(argv[++i]);
+                } else {
+                    input_paths.emplace_back(argv[i]);
+                }
             }
 
             const auto sampling_start = std::chrono::steady_clock::now();
@@ -96,11 +110,11 @@ int main(int argc, char** argv) {
                 input_paths, keyspace_size, partitions, sample_fraction);
             const auto merge_start = std::chrono::steady_clock::now();
 
-            auto records = splice::parallel_compact_ranges(
-                input_paths, plan.boundaries, threads);
+            auto result = splice::parallel_compact_ranges(
+                input_paths, plan.boundaries, threads, policy);
             const auto merge_end = std::chrono::steady_clock::now();
 
-            splice::SSTableWriter::write(output_path, records);
+            splice::SSTableWriter::write(output_path, result.records);
             const auto total_end = std::chrono::steady_clock::now();
 
             const auto sample_ms =
@@ -117,12 +131,16 @@ int main(int argc, char** argv) {
                       << "SPLICE: " << plan.samples_read << " samples, "
                       << plan.actual_partitions() << " actual ranges for "
                       << partitions << " requested partitions, "
-                      << threads << " requested threads\n"
+                      << threads << " requested threads, "
+                      << "schedule=" << splice::to_string(policy) << '\n'
                       << "Sampling and planning: " << sample_ms << " ms\n"
                       << "Parallel merge and join: " << merge_ms << " ms\n"
+                      << "Load imbalance (LI): " << result.stats.load_imbalance << '\n'
+                      << "Max thread time: " << result.stats.max_thread_ms << " ms\n"
+                      << "Avg thread time: " << result.stats.avg_thread_ms << " ms\n"
                       << "End-to-end including output write: "
                       << total_ms << " ms\n"
-                      << "Live output records: " << records.size() << '\n';
+                      << "Live output records: " << result.records.size() << '\n';
             return 0;
         }
 

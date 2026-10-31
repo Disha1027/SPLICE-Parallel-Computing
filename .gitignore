@@ -12,3 +12,9 @@ Makefile
 /build*/
 /data/
 /results/phase7_runs.csv
+splice
+.cache/
+.DS_Store
+frontend/dist/
+frontend/node_modules/
+compile_commands.json

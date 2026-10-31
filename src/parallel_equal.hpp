@@ -8,11 +8,12 @@
 
 namespace splice {
 
-inline std::vector<Record> parallel_equal_compact(
+inline ParallelCompactResult parallel_equal_compact(
     const std::vector<std::filesystem::path>& input_paths,
     Key keyspace_size,
     std::size_t partition_count,
-    std::size_t thread_count) {
+    std::size_t thread_count,
+    SchedulePolicy policy = SchedulePolicy::Static) {
     if (keyspace_size == 0 || partition_count == 0) {
         throw std::runtime_error(
             "keyspace size and partition count must be positive");
@@ -25,7 +26,7 @@ inline std::vector<Record> parallel_equal_compact(
     }
 
     return parallel_compact_ranges(
-        input_paths, boundaries, thread_count);
+        input_paths, boundaries, thread_count, policy);
 }
 
 } // namespace splice

@@ -1,0 +1,8 @@
+CompileFlags:
+  Compiler: /opt/homebrew/opt/llvm/bin/clang++
+  Add:
+    - -std=c++17
+    - -I/opt/homebrew/opt/libomp/include
+    - -Wno-unknown-pragmas
+  Remove:
+    - -fopenmp
