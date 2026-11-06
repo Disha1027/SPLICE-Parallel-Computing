@@ -1,14 +1,4 @@
 # SPLICE: High-Performance Parallel LSM-Tree Compaction Engine
-
-> **Course Project:** High-Performance & Parallel Computing  
-> **Core Focus:** Multi-threaded SSTable compaction, stratified quantile key-range partitioning, OpenMP scheduling, and real-time visualization.
-
-[![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
-[![OpenMP](https://img.shields.io/badge/Parallel-OpenMP-438440?logo=openmp)](https://www.openmp.org/)
-[![CMake](https://img.shields.io/badge/Build-CMake%203.20%2B-064F8C?logo=cmake)](https://cmake.org/)
-[![Vite](https://img.shields.io/badge/Frontend-Vite%20%2B%20React-646CFF?logo=vite)](https://vitejs.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-
 ---
 
 ## Table of Contents
